@@ -10,6 +10,7 @@ export interface Task {
   createdAt: string;
   completedAt?: string;
   estimatedMinutes?: number;
+  habitId?: string;
 }
 
 export interface Subtask {

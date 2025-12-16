@@ -36,7 +36,8 @@ export function useTasks() {
         subtasks: typeof t.subtasks === 'string' ? JSON.parse(t.subtasks) : t.subtasks || [],
         createdAt: t.created_at || new Date().toISOString(),
         completedAt: t.completed_at || undefined,
-        estimatedMinutes: t.estimated_minutes || undefined
+        estimatedMinutes: t.estimated_minutes || undefined,
+        habitId: t.habit_id || undefined
       })) as Task[];
     },
     enabled: !!session?.user?.id,
@@ -52,7 +53,8 @@ export function useTasks() {
         due_date: task.dueDate,
         category: task.category,
         subtasks: task.subtasks ? JSON.stringify(task.subtasks) : '[]',
-        estimated_minutes: task.estimatedMinutes
+        estimated_minutes: task.estimatedMinutes,
+        habit_id: task.habitId
       }).select().single();
       if (error) throw error;
       return data;
@@ -170,7 +172,7 @@ export function useHabits() {
 
   const addHabitMutation = useMutation({
     mutationFn: async (habit: Omit<Habit, 'id' | 'createdAt' | 'streak' | 'bestStreak' | 'completedDates'>) => {
-      const { error } = await supabase.from('habits').insert({
+      const { data, error } = await supabase.from('habits').insert({
         user_id: session?.user?.id,
         title: habit.title,
         frequency: habit.frequency,
@@ -179,14 +181,31 @@ export function useHabits() {
         // Default values
         streak: 0,
         best_streak: 0
-      });
+      }).select().single();
       if (error) throw error;
+      return data;
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['habits'] }),
   });
 
   const deleteHabitMutation = useMutation({
     mutationFn: async (id: string) => {
+      // 1. Get habit details for legacy matching
+      const { data: habit } = await supabase.from('habits').select('title').eq('id', id).single();
+
+      // 2. Cascade delete tasks by habit_id (Cleanest way)
+      const { error: errorId } = await supabase.from('tasks').delete().eq('habit_id', id);
+      if (errorId) throw errorId;
+
+      // 3. Legacy fallback: Delete tasks by description matching
+      if (habit?.title) {
+        const { error: errorLegacy } = await supabase.from('tasks')
+          .delete()
+          .ilike('description', `Habit: ${habit.title} - %`);
+        if (errorLegacy) throw errorLegacy;
+      }
+
+      // 4. Delete the habit
       const { error } = await supabase.from('habits').delete().eq('id', id);
       if (error) throw error;
     },
@@ -252,7 +271,7 @@ export function useHabits() {
 
   return {
     habits,
-    addHabit: (habit: Omit<Habit, 'id' | 'createdAt' | 'streak' | 'bestStreak' | 'completedDates'>) => addHabitMutation.mutate(habit),
+    addHabit: (habit: Omit<Habit, 'id' | 'createdAt' | 'streak' | 'bestStreak' | 'completedDates'>) => addHabitMutation.mutateAsync(habit),
     updateHabit: (habit: Habit) => updateHabitMutation.mutate(habit),
     deleteHabit: (id: string) => deleteHabitMutation.mutate(id),
     completeHabit: (id: string) => completeHabitMutation.mutate(id),
@@ -672,10 +691,112 @@ export function useCategories() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['categories'] }),
   });
 
+  const updateCategoryMutation = useMutation({
+    mutationFn: async (category: { id: string, name: string, color: string }) => {
+      const { error } = await supabase.from('categories').update({
+        name: category.name,
+        color: category.color
+      }).eq('id', category.id);
+      if (error) throw error;
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['categories'] }),
+  });
+
   return {
     categories,
     addCategory: (name: string, color: string) => addCategoryMutation.mutateAsync({ name, color }),
+    updateCategory: (id: string, name: string, color: string) => updateCategoryMutation.mutateAsync({ id, name, color }),
     deleteCategory: (id: string) => deleteCategoryMutation.mutateAsync(id)
+  };
+}
+
+// --- DATA MANAGEMENT HOOK (DANGER ZONE) ---
+export function useDataManagement() {
+  const { session } = useAuth();
+  const queryClient = useQueryClient();
+
+  const verifyPassword = async (password: string) => {
+    if (!session?.user?.email) throw new Error("User not found");
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: session.user.email,
+      password: password
+    });
+    if (error) throw error;
+    return !!data.user;
+  };
+
+  const deleteAllTasksMutation = useMutation({
+    mutationFn: async () => {
+      // Delete tasks, focus sessions, generic events
+      const { error: tErr } = await supabase.from('tasks').delete().neq('id', '00000000-0000-0000-0000-000000000000'); // Delete all matching RLS
+      if (tErr) throw tErr;
+      const { error: fErr } = await supabase.from('focus_sessions').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+      if (fErr) throw fErr;
+      const { error: cErr } = await supabase.from('calendar_events').delete().eq('event_type', 'task');
+      if (cErr) throw cErr;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      queryClient.invalidateQueries({ queryKey: ['focus_sessions'] });
+      queryClient.invalidateQueries({ queryKey: ['calendar'] });
+      queryClient.invalidateQueries({ queryKey: ['stats'] });
+      toast.success("All tasks and focus history wiped.");
+    }
+  });
+
+  const deleteAllJournalsMutation = useMutation({
+    mutationFn: async () => {
+      const { error } = await supabase.from('journal_entries').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['journal'] });
+      queryClient.invalidateQueries({ queryKey: ['stats'] });
+      toast.success("Journal encrypted archives destroyed.");
+    }
+  });
+
+  const deleteEverythingMutation = useMutation({
+    mutationFn: async () => {
+      // 1. Data Tables
+      await supabase.from('tasks').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+      await supabase.from('habits').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+      await supabase.from('journal_entries').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+      await supabase.from('focus_sessions').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+      await supabase.from('calendar_events').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+      await supabase.from('mood_logs').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+      await supabase.from('ai_messages').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+      await supabase.from('achievements').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+
+      // 2. Reset Stats
+      await supabase.from('user_stats').update({
+        total_tasks: 0,
+        completed_tasks: 0,
+        total_focus_minutes: 0,
+        total_journal_entries: 0,
+        current_task_streak: 0,
+        current_focus_streak: 0,
+        current_journal_streak: 0,
+        level: 1,
+        xp: 0
+      }).eq('id', session?.user?.id);
+
+      // 3. Reset Categories to Default? (Optional, maybe keep custom sectors or wipe them?)
+      // User said "delete all data and all history". Categories are config data. Let's wipe custom ones, keep defaults.
+      await supabase.from('categories').delete().eq('is_default', false);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries();
+      toast.success("SYSTEM FACTORY RESET COMPLETE. WELCOME BACK, OPERATOR.");
+    }
+  });
+
+  return {
+    verifyPassword,
+    deleteAllTasks: deleteAllTasksMutation.mutateAsync,
+    deleteAllJournals: deleteAllJournalsMutation.mutateAsync,
+    deleteEverything: deleteEverythingMutation.mutateAsync,
+    isLoading: deleteAllTasksMutation.isPending || deleteAllJournalsMutation.isPending || deleteEverythingMutation.isPending
   };
 }
 

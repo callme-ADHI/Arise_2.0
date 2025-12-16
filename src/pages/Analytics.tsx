@@ -315,11 +315,22 @@ const Analytics = () => {
                         return (
                           <tr key={habit.id}>
                             <td className="text-sm py-2 pr-4 max-w-[150px] truncate">{habit.title}</td>
-                            {last7Days.map(date => (
-                              <td key={date} className="p-1">
-                                <div className={cn("w-6 h-6 rounded transition-all", habit.completedDates.includes(date) ? habit.color : "bg-secondary/50")} />
-                              </td>
-                            ))}
+                            {last7Days.map(date => {
+                              const isCompleted = habit.completedDates.includes(date);
+                              // Logic: 
+                              // - If completed: use category color (habit.color)
+                              // - If NOT completed: use Red (bg-red-500/20 or similar) to signify missed
+                              // Note: last7Days usually ends with today.
+                              const cellColor = isCompleted
+                                ? habit.color
+                                : "bg-red-500/20"; // Red for missed
+
+                              return (
+                                <td key={date} className="p-1">
+                                  <div className={cn("w-6 h-6 rounded transition-all", cellColor)} />
+                                </td>
+                              );
+                            })}
                             <td className={cn("text-right font-medium", rate >= 70 ? "text-arise-success" : rate >= 40 ? "text-arise-warning" : "text-destructive")}>{rate}%</td>
                           </tr>
                         );

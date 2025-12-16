@@ -6,7 +6,7 @@ import { Progress } from "@/components/ui/progress";
 import { Switch } from "@/components/ui/switch";
 import { Slider } from "@/components/ui/slider";
 import { useTheme } from "@/components/ThemeProvider";
-import { useStats, useApp, useAI, useAchievements, useTasks, useFocus, useJournal, useHabits } from "@/lib/store";
+import { useStats, useApp, useAI, useAchievements, useTasks, useFocus, useJournal, useHabits, useDataManagement } from "@/lib/store";
 import { useToast } from "@/hooks/use-toast";
 import { motion, AnimatePresence } from "framer-motion";
 import { calculateLevelInfo } from "@/lib/progression";
@@ -94,6 +94,18 @@ const HoloStat = ({ label, value, icon: Icon, color = "cyan" }: { label: string,
   </div>
 );
 
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+  DialogFooter
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { AlertTriangle, Lock } from "lucide-react";
+
 const Profile = () => {
   const { theme, setTheme } = useTheme();
   const stats = useStats();
@@ -105,11 +117,20 @@ const Profile = () => {
   const { habits } = useHabits();
   const { toast } = useToast();
 
+  // Data Management Hook
+  const { verifyPassword, deleteAllTasks, deleteAllJournals, deleteEverything, isLoading: isPurging } = useDataManagement();
+
   const [activeTab, setActiveTab] = useState<'status' | 'achievements' | 'config'>('status');
   const [isEditingName, setIsEditingName] = useState(false);
   const [editName, setEditName] = useState(state.userName);
   const [notifications, setNotifications] = useState({ tasks: true, focus: true, habits: true, insights: true });
   const [focusSettings, setFocusSettings] = useState({ defaultDuration: 25, breakDuration: 5, autoBreak: true });
+
+  // Delete Dialog State
+  const [showPurgeDialog, setShowPurgeDialog] = useState(false);
+  const [purgeStep, setPurgeStep] = useState<'verify' | 'select'>('verify');
+  const [password, setPassword] = useState("");
+  const [purgeError, setPurgeError] = useState("");
 
   const getAchievementStatus = (achievement: typeof achievementTiers[0]) => {
     let current = 0;
@@ -131,6 +152,37 @@ const Profile = () => {
     updateProfile({ name: editName });
     setIsEditingName(false);
     toast({ title: "IDENTITY UPDATED", description: "Operator profile re-calibrated." });
+  };
+
+  const handleVerifyPassword = async () => {
+    if (!password) {
+      setPurgeError("Password required");
+      return;
+    }
+    setPurgeError("");
+    try {
+      const isValid = await verifyPassword(password);
+      if (isValid) {
+        setPurgeStep('select');
+      } else {
+        setPurgeError("Invalid password");
+      }
+    } catch (e) {
+      setPurgeError("Verification failed");
+    }
+  };
+
+  const handlePurge = async (type: 'tasks' | 'journals' | 'all') => {
+    try {
+      if (type === 'tasks') await deleteAllTasks();
+      if (type === 'journals') await deleteAllJournals();
+      if (type === 'all') await deleteEverything();
+      setShowPurgeDialog(false);
+      setPassword("");
+      setPurgeStep('verify');
+    } catch (e) {
+      toast({ title: "Purge Failed", description: "System lock engaged.", variant: "destructive" });
+    }
   };
 
   const navItems = [
@@ -417,9 +469,82 @@ const Profile = () => {
                     <Button variant="outline" className="border-cyan-500/30 hover:bg-cyan-500/10 text-cyan-400 font-mono" onClick={() => toast({ title: "EXPORT INITIATED", description: "Archiving neural patterns..." })}>
                       <Download className="w-4 h-4 mr-2" /> EXPORT
                     </Button>
-                    <Button variant="outline" className="border-red-500/30 hover:bg-red-500/10 text-red-400 font-mono" onClick={() => toast({ title: "ACCESS DENIED", description: "Core data is protected." })}>
-                      <Trash2 className="w-4 h-4 mr-2" /> PURGE
-                    </Button>
+
+                    <Dialog open={showPurgeDialog} onOpenChange={setShowPurgeDialog}>
+                      <DialogTrigger asChild>
+                        <Button variant="outline" className="border-red-500/30 hover:bg-red-500/10 text-red-400 font-mono">
+                          <Trash2 className="w-4 h-4 mr-2" /> PURGE
+                        </Button>
+                      </DialogTrigger>
+                      <DialogContent className="border-red-500/20 bg-zinc-950 text-white font-mono sm:max-w-[425px]">
+                        <DialogHeader>
+                          <DialogTitle className="text-red-500 flex items-center gap-2">
+                            <AlertTriangle className="w-5 h-5" />
+                            DANGER ZONE: DATA PURGE
+                          </DialogTitle>
+                          <DialogDescription className="text-zinc-500 text-xs">
+                            Security Protocol Alpha-1 engaged. Authorization required for destructive commands.
+                          </DialogDescription>
+                        </DialogHeader>
+
+                        {purgeStep === 'verify' && (
+                          <div className="space-y-4 py-4">
+                            <div className="space-y-2">
+                              <Label className="text-xs text-red-300">ENTER ACCESS CODE (PASSWORD)</Label>
+                              <div className="relative">
+                                <Lock className="absolute left-3 top-2.5 h-4 w-4 text-zinc-500" />
+                                <Input
+                                  type="password"
+                                  value={password}
+                                  onChange={(e) => setPassword(e.target.value)}
+                                  className="pl-9 bg-black border-red-900/50 text-red-100 placeholder:text-red-900/50"
+                                  placeholder="••••••••••••"
+                                />
+                              </div>
+                              {purgeError && <p className="text-red-500 text-xs animate-pulse">{purgeError}</p>}
+                            </div>
+                            <Button className="w-full bg-red-900/20 text-red-500 hover:bg-red-900/40 border border-red-900/50" onClick={handleVerifyPassword}>
+                              VERIFY CLEARANCE
+                            </Button>
+                          </div>
+                        )}
+
+                        {purgeStep === 'select' && (
+                          <div className="space-y-3 py-4">
+                            <p className="text-xs text-zinc-400 mb-2">ACCESS GRANTED. SELECT TARGET:</p>
+
+                            <Button
+                              variant="outline"
+                              className="w-full justify-start text-zinc-300 hover:text-red-400 hover:bg-red-950/30 border-zinc-800"
+                              onClick={() => handlePurge('tasks')}
+                              disabled={isPurging}
+                            >
+                              [1] DELETE ALL TASKS & FOCUS LOGS
+                            </Button>
+
+                            <Button
+                              variant="outline"
+                              className="w-full justify-start text-zinc-300 hover:text-red-400 hover:bg-red-950/30 border-zinc-800"
+                              onClick={() => handlePurge('journals')}
+                              disabled={isPurging}
+                            >
+                              [2] DELETE ALL JOURNAL ENTRIES
+                            </Button>
+
+                            <div className="w-full h-px bg-red-900/30 my-2" />
+
+                            <Button
+                              variant="destructive"
+                              className="w-full bg-red-600 hover:bg-red-700 text-white font-bold tracking-widest"
+                              onClick={() => handlePurge('all')}
+                              disabled={isPurging}
+                            >
+                              [3] WIPE ALL SYSTEM DATA
+                            </Button>
+                          </div>
+                        )}
+                      </DialogContent>
+                    </Dialog>
                   </div>
                 </TechCard>
               </motion.div>

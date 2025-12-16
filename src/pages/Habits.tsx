@@ -11,7 +11,9 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import { useHabits, useCategories, useTasks, useCalendar } from "@/lib/store";
+// import AdvancedColorPicker from "@/components/ui/advanced-color-picker"; // Not needed directly anymore
 import { useToast } from "@/hooks/use-toast";
+import CategoryManagerDialog from "@/components/CategoryManagerDialog";
 import { cn } from "@/lib/utils";
 
 const habitColors = ["bg-primary", "bg-accent", "bg-arise-success", "bg-arise-warning", "bg-arise-energy", "bg-arise-info"];
@@ -55,6 +57,8 @@ const Habits = () => {
   const [aiAnalysis, setAiAnalysis] = useState<HabitAnalysis | null>(null);
   const [selectedActions, setSelectedActions] = useState<number[]>([]);
   const [newCategory, setNewCategory] = useState("");
+  const [newCategoryColor, setNewCategoryColor] = useState(habitColors[1]); // Default to something not primary/red if possible, though index 1 is fine
+  const [selectedHabitCategory, setSelectedHabitCategory] = useState<string>("");
   const [isManagingCategories, setIsManagingCategories] = useState(false);
 
   // Pre-habit questions
@@ -161,19 +165,31 @@ const Habits = () => {
     );
   };
 
-  const scheduleHabitTasks = () => {
+  const scheduleHabitTasks = async () => {
     if (!aiAnalysis || selectedActions.length === 0) {
       toast({ title: "Please select at least one action", variant: "destructive" });
       return;
     }
 
-    // Create the habit
-    addHabit({
+    // Resolve category and color
+    const categoryName = selectedHabitCategory || "General";
+
+    // Find the category object
+    const categoryObj = categories.find(c => c.name === categoryName);
+
+    // Logic: If 'General' or not found, use Grey. Else use category color.
+    // We force 'General' to be grey always.
+    const habitColor = (categoryName === "General" || !categoryObj)
+      ? "bg-zinc-500"
+      : categoryObj.color;
+
+    // Create the habit and get the ID
+    const newHabit = await addHabit({
       title: newHabitTitle,
       description: aiAnalysis.implementation_intention,
       frequency: 'daily',
-      category: 'Personal',
-      color: habitColors[Math.floor(Math.random() * habitColors.length)]
+      category: categoryName,
+      color: habitColor
     });
 
     // Schedule tasks for the next 60 days
@@ -197,7 +213,7 @@ const Habits = () => {
           completed: false,
           priority: day < 7 ? 'high' : 'medium',
           dueDate: dateStr,
-          category: 'Personal',
+          category: categoryName,
           subtasks: [],
           estimatedMinutes: action.estimatedMinutes
         });
@@ -238,8 +254,11 @@ const Habits = () => {
   const handleAddCategory = async () => {
     if (!newCategory.trim()) return;
     try {
-      await addCategory(newCategory, habitColors[Math.floor(Math.random() * habitColors.length)]);
+      // Allow user to pick color, but we filter out Red in UI.
+      // Just in case, if they somehow picked Red (index 0 usually), we could force change, but UI restriction is better.
+      await addCategory(newCategory, newCategoryColor);
       setNewCategory("");
+      setNewCategoryColor(habitColors[Math.floor(Math.random() * (habitColors.length - 1)) + 1]); // Skip first red-ish if 0 is red
       toast({ title: "Category added!" });
     } catch (error) {
       toast({ title: "Failed to add category", description: "Please try again.", variant: "destructive" });
@@ -299,9 +318,34 @@ const Habits = () => {
           <div className="col-span-full mb-4">
             <Card className="bg-zinc-900/80 border-indigo-500/30 backdrop-blur-xl shadow-[0_0_30px_rgba(79,70,229,0.1)]">
               <CardContent className="pt-6 space-y-4">
-                <div className="flex items-center gap-3 text-indigo-400">
-                  <Sparkles className="w-5 h-5" />
-                  <span className="font-mono text-sm tracking-widest uppercase">New Protocol Sequence</span>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3 text-indigo-400">
+                    <Sparkles className="w-5 h-5" />
+                    <span className="font-mono text-sm tracking-widest uppercase">New Protocol Sequence</span>
+                  </div>
+
+                  {/* Category Selector */}
+                  <Select value={selectedHabitCategory} onValueChange={setSelectedHabitCategory}>
+                    <SelectTrigger className="w-[180px] bg-zinc-800/50 border-white/10 h-8 text-xs">
+                      <SelectValue placeholder="Select Sector" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-zinc-900 border-zinc-800">
+                      <SelectItem value="General">
+                        <div className="flex items-center gap-2">
+                          <div className="w-2 h-2 rounded-full bg-zinc-500" />
+                          General
+                        </div>
+                      </SelectItem>
+                      {categories.map(c => (
+                        <SelectItem key={c.id} value={c.name}>
+                          <div className="flex items-center gap-2">
+                            <div className={cn("w-2 h-2 rounded-full", c.color)} />
+                            {c.name}
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
                 <Input
                   placeholder="Define target behavior (e.g. 'Read 30 mins', 'Morning Run')..."
@@ -538,57 +582,15 @@ const Habits = () => {
           )}
         </DialogContent>
       </Dialog>
-
-      {/* Category Manager (Re-Styled) */}
-      <Dialog open={isManagingCategories} onOpenChange={setIsManagingCategories}>
-        <DialogContent className="sm:max-w-[400px] bg-zinc-950 border-zinc-800 text-white">
-          <DialogHeader>
-            <DialogTitle>Sector Management</DialogTitle>
-            <DialogDescription className="text-zinc-500">Organize habits into life sectors.</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 pt-4">
-            <div className="flex gap-2">
-              <Input
-                placeholder="New Sector Name"
-                value={newCategory}
-                onChange={(e) => setNewCategory(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleAddCategory()}
-                className="bg-zinc-900 border-zinc-800 focus-visible:ring-indigo-500/50"
-              />
-              <Button onClick={handleAddCategory} disabled={!newCategory.trim()} className="bg-indigo-600 hover:bg-indigo-500">
-                <Plus className="w-4 h-4" />
-              </Button>
-            </div>
-            <div className="text-xs text-zinc-500 uppercase tracking-widest pl-1 font-mono">Active Sectors</div>
-            <ScrollArea className="h-[300px] pr-4">
-              <div className="space-y-2">
-                {categories.map(c => (
-                  <div key={c.id} className="flex items-center justify-between p-3 rounded-lg border border-white/5 bg-white/5 hover:bg-white/10 transition-colors">
-                    <div className="flex items-center gap-3">
-                      <div className={cn("w-3 h-3 rounded-full shadow-[0_0_8px_rgba(255,255,255,0.3)]", c.color)} />
-                      <span className="text-sm font-medium text-zinc-300">{c.name}</span>
-                    </div>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8 text-zinc-500 hover:text-red-400 hover:bg-red-900/20"
-                      onClick={() => {
-                        deleteCategory(c.id).catch(() => {
-                          toast({ title: "Failed to delete", variant: "destructive" });
-                        });
-                      }}
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
-                  </div>
-                ))}
-              </div>
-            </ScrollArea>
-          </div>
-        </DialogContent>
-      </Dialog>
+      <CategoryManagerDialog
+        isOpen={isManagingCategories}
+        onClose={setIsManagingCategories}
+      />
     </div>
   );
 };
+
+
+
 
 export default Habits;

@@ -13,6 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { useTasks, useCategories } from "@/lib/store";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import CategoryManagerDialog from "@/components/CategoryManagerDialog";
 import { Task } from "@/lib/types";
 import { motion, AnimatePresence, useScroll, useTransform } from "framer-motion";
 
@@ -341,26 +342,11 @@ const Tasks = () => {
         </Dialog>
 
         {/* Category Manager */}
-        <Dialog open={isManagingCategories} onOpenChange={setIsManagingCategories}>
-          <DialogContent className="bg-zinc-950 border-zinc-800 text-white sm:max-w-[400px]">
-            <DialogHeader><DialogTitle>Sector Management</DialogTitle></DialogHeader>
-            <div className="space-y-4 pt-4">
-              <div className="flex gap-2">
-                <Input placeholder="New Sector Name" value={newCatName} onChange={e => setNewCatName(e.target.value)} className="bg-zinc-900 border-zinc-800 focus-visible:ring-amber-500" />
-                <Button onClick={handleCreateCategory} type="button" disabled={!newCatName.trim()} className="bg-emerald-600 hover:bg-emerald-500 text-white"><Plus className="w-5 h-5" /></Button>
-              </div>
-              <div className="text-xs text-zinc-500 uppercase tracking-widest pl-1">Active Sectors</div>
-              <div className="space-y-2 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
-                {categories.map(c => (
-                  <motion.div layout initial={{ opacity: 0 }} animate={{ opacity: 1 }} key={c.id} className="flex items-center justify-between p-3 rounded-lg bg-zinc-900/50 border border-white/5 hover:border-white/20 transition-colors group">
-                    <div className="flex items-center gap-3"><div className={cn("w-3 h-3 rounded-full shadow-[0_0_8px_rgba(0,0,0,0.5)]", c.color)} /><span className="text-sm font-medium text-zinc-300">{c.name}</span></div>
-                    <Button variant="ghost" size="icon" className="h-8 w-8 text-zinc-500 hover:text-red-400 opacity-50 group-hover:opacity-100 transition-opacity" onClick={() => deleteCategory(c.id)}><Trash2 className="w-4 h-4" /></Button>
-                  </motion.div>
-                ))}
-              </div>
-            </div>
-          </DialogContent>
-        </Dialog>
+        {/* Category Manager */}
+        <CategoryManagerDialog
+          isOpen={isManagingCategories}
+          onClose={setIsManagingCategories}
+        />
 
       </div>
     </div>
