@@ -158,12 +158,35 @@ const Auth = () => {
     }
 
     setIsLoading(true);
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    try {
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
 
-    if (error) {
-      toast({ title: error.message, variant: "destructive" });
+      if (error) {
+        // Check for specific "Project removed" or JSON parsing errors which indicate backend is dead
+        if (error.message.includes("Unexpected token") || error.message.includes("Project removed")) {
+          toast({
+            title: "Connection Error",
+            description: "Unable to connect to the server. The project may have been removed or credentials are invalid.",
+            variant: "destructive"
+          });
+        } else {
+          toast({ title: error.message, variant: "destructive" });
+        }
+      }
+    } catch (err: any) {
+      // Catch unexpected fetch/parse errors
+      if (err.message?.includes("Unexpected token") || err.message?.includes("Project removed")) {
+        toast({
+          title: "Connection Error",
+          description: "Unable to connect to the server. The project may have been removed or credentials are invalid.",
+          variant: "destructive"
+        });
+      } else {
+        toast({ title: "An unexpected error occurred", variant: "destructive" });
+      }
+    } finally {
+      setIsLoading(false);
     }
-    setIsLoading(false);
   };
 
   return (
