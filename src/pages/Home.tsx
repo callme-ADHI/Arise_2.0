@@ -108,7 +108,7 @@ const Home = () => {
       </div>
 
       {/* Quick Actions - Premium Formal */}
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <Button
           className="group relative h-24 flex flex-col gap-3 bg-zinc-900/40 border border-white/5 hover:border-blue-500/30 hover:bg-zinc-800/60 text-white shadow-lg transition-all duration-300 overflow-hidden"
           onClick={() => navigate('/tasks')}
@@ -348,7 +348,7 @@ const Home = () => {
 
       {/* Quick Task Dialog */}
       <Dialog open={isTaskOpen} onOpenChange={setIsTaskOpen}>
-        <DialogContent className="bg-zinc-900 border-white/10 text-white">
+        <DialogContent className="bg-zinc-900 border-white/10 text-white max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Add Quick Task</DialogTitle>
           </DialogHeader>

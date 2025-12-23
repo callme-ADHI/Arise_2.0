@@ -63,6 +63,46 @@ const Journal = () => {
     new Date(e.createdAt).toLocaleDateString().includes(searchQuery)
   );
 
+  const analyzeMood = (text: string) => {
+    const lower = text.toLowerCase();
+    const keywords = {
+      1: ['terrible', 'horrible', 'worst', 'hate', 'depressed', 'sad', 'awful', 'pain', 'cry', 'failed', 'bad day'],
+      2: ['bad', 'tired', 'annoyed', 'hard', 'difficult', 'struggling', 'stress', 'anxious', 'boring', 'lonely'],
+      4: ['good', 'happy', 'nice', 'better', 'productive', 'fun', 'enjoyed', 'liked', 'cool', 'calm'],
+      5: ['amazing', 'great', 'awesome', 'best', 'love', 'excited', 'fantastic', 'wonderful', 'perfect', 'grateful']
+    };
+
+    let score = 3; // Start Neutral
+    let matches = { 1: 0, 2: 0, 4: 0, 5: 0 };
+
+    // Simple frequency count
+    Object.entries(keywords).forEach(([level, words]) => {
+      words.forEach(word => {
+        if (lower.includes(word)) matches[level as any] = (matches[level as any] || 0) + 1;
+      });
+    });
+
+    // Determine winner
+    if (matches[5] > 0 && matches[5] >= matches[1] && matches[5] >= matches[2]) score = 5;
+    else if (matches[1] > 0 && matches[1] >= matches[5] && matches[1] >= matches[4]) score = 1;
+    else if (matches[4] > matches[2]) score = 4;
+    else if (matches[2] > matches[4]) score = 2;
+
+    return score;
+  };
+
+  // Auto-analyze mood when content changes significantly (simple version)
+  const handleContentChange = (content: string) => {
+    setNewEntry(prev => {
+      // Only auto-update if content length > 10 to avoid noise
+      if (content.length > 10) {
+        const suggestedMood = analyzeMood(content);
+        return { ...prev, content, mood: suggestedMood };
+      }
+      return { ...prev, content };
+    });
+  };
+
   return (
     <div className="space-y-4 animate-fade-in">
       <div className="flex items-center justify-between">
@@ -79,7 +119,12 @@ const Journal = () => {
           <CardContent className="space-y-3">
             <div className="flex gap-2 justify-center">{[1, 2, 3, 4, 5].map((m) => (<Button key={m} variant={newEntry.mood === m ? "default" : "outline"} size="sm" onClick={() => setNewEntry({ ...newEntry, mood: m })}>{moodEmojis[m]}</Button>))}</div>
             <Input placeholder="Entry title" value={newEntry.title} onChange={(e) => setNewEntry({ ...newEntry, title: e.target.value })} />
-            <Textarea placeholder="Write your thoughts..." value={newEntry.content} onChange={(e) => setNewEntry({ ...newEntry, content: e.target.value })} className="min-h-[150px]" />
+            <Textarea
+              placeholder="Write your thoughts..."
+              value={newEntry.content}
+              onChange={(e) => handleContentChange(e.target.value)}
+              className="min-h-[150px]"
+            />
             <div className="flex gap-2"><Input placeholder="Add tag..." value={tagInput} onChange={(e) => setTagInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addTag(newEntry, setNewEntry))} /><Button variant="outline" onClick={() => addTag(newEntry, setNewEntry)}>Add</Button></div>
             {newEntry.tags.length > 0 && <div className="flex flex-wrap gap-1">{newEntry.tags.map((tag) => (<span key={tag} className="px-2 py-0.5 text-xs rounded-full bg-primary/20 text-primary cursor-pointer" onClick={() => setNewEntry({ ...newEntry, tags: newEntry.tags.filter(t => t !== tag) })}>#{tag} ×</span>))}</div>}
             <div className="flex gap-2"><Button variant="outline" className="flex-1" onClick={() => setIsWriting(false)}>Cancel</Button><Button className="flex-1" onClick={handleSave}><Save className="w-4 h-4 mr-2" />Save</Button></div>

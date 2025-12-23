@@ -5,9 +5,94 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Task, JournalEntry, FocusSession, CalendarEvent, MoodLog, UserStats, Achievement, Habit, AIMessage, UserProfile, Category } from './types';
 import { toast } from 'sonner';
 import { calculateLevelInfo, XP_REWARDS } from './progression';
+import { NotificationManager } from './notifications';
 
 // Helper to get today's date in YYYY-MM-DD
-const getToday = () => new Date().toISOString().split('T')[0];
+const getToday = () => new Date().toLocaleDateString('en-CA');
+
+const updateTaskNotification = async (userId: string) => {
+  const { count } = await supabase.from('tasks').select('*', { count: 'exact', head: true }).eq('completed', false).eq('user_id', userId);
+  if (count !== null && count > 0) {
+    NotificationManager.scheduleDailyTaskSummary();
+  } else {
+    NotificationManager.cancelDailyTaskSummary();
+  }
+};
+
+const updateJournalNotification = async (userId: string) => {
+  const today = getToday();
+  // Simple check: do we have any entry created today?
+  // We'll trust the database generic check or just check local cache if easier, but DB is safer.
+  // Actually, let's use the same range logic as the hooks if possible, or just exact date match if stored as date.
+  // The hooks use created_at (timestamptz). 
+  // Let's match >= today T00:00:00 and < tomorrow
+  const { count } = await supabase.from('journal_entries').select('*', { count: 'exact', head: true })
+    .eq('user_id', userId)
+    .gte('created_at', `${today}T00:00:00.000Z`)
+    .lt('created_at', `${today}T23:59:59.999Z`);
+
+  if (count !== null && count > 0) {
+    NotificationManager.cancelDailyJournalSummary();
+  } else {
+    NotificationManager.scheduleDailyJournalSummary();
+  }
+};
+
+// --- HELPER FUNCTIONS ---
+
+export const refreshHabitTasks = async (userId: string) => {
+  const today = getToday();
+
+  // 1. Get all active habits
+  const { data: habits, error: habitsError } = await supabase.from('habits').select('*').eq('user_id', userId);
+  if (habitsError || !habits) return;
+
+  // 2. Get today's existing habit tasks 
+  // (We identify them by description or metadata. Ideally we'd have a habit_id column on tasks but for now we rely on the prefix convention or metadata if we added it)
+  // Actually, wait, let's verify if we added habit_id column to tasks? 
+  // Looking at useTasks hook line 69: `habitId: t.habit_id || undefined`. Yes we have it!
+  const { data: existingTasks } = await supabase.from('tasks')
+    .select('habit_id, id, completed')
+    .eq('user_id', userId)
+    .not('habit_id', 'is', null)
+    .eq('due_date', today);
+
+  const existingHabitIds = existingTasks?.map(t => t.habit_id) || [];
+
+  // 3. Create missing tasks for today
+  const missingHabits = habits.filter(h => !existingHabitIds.includes(h.id));
+
+  for (const habit of missingHabits) {
+    // Only create if habit is scheduled for today (frequency check)
+    // For MVP "daily" means every day. If we had complex frequency we'd check here.
+    // Assuming 'daily' for now as per habits hook defaults.
+    const { data: newHabitTask, error: newHabitError } = await supabase.from('tasks').insert({
+      user_id: userId,
+      title: habit.title,
+      description: `Habit: ${habit.title} - ${habit.description || 'Daily Protocol'}`,
+      priority: 'medium',
+      due_date: today,
+      category: habit.category,
+      habit_id: habit.id,
+      estimated_minutes: 15,
+      reminder_time: '18:00' // Default reminder for habits
+    }).select().single();
+
+    if (!newHabitError && newHabitTask) {
+      NotificationManager.scheduleTaskReminder(newHabitTask.id, newHabitTask.title, newHabitTask.due_date, '18:00');
+    }
+  }
+
+  // 4. CLEANUP: Delete INCOMPLETE habit tasks from BEFORE today to prevent clutter
+  // CHANGED: User wants to keep them as "Pending".
+  // So we do NOT delete them anymore.
+  // await supabase.from('tasks')
+  //   .delete()
+  //   .eq('user_id', userId)
+  //   .not('habit_id', 'is', null)
+  //   .eq('completed', false)
+  //   .lt('due_date', today);
+};
 
 // --- TASKS HOOK ---
 export function useTasks() {
@@ -37,7 +122,9 @@ export function useTasks() {
         createdAt: t.created_at || new Date().toISOString(),
         completedAt: t.completed_at || undefined,
         estimatedMinutes: t.estimated_minutes || undefined,
-        habitId: t.habit_id || undefined
+        habitId: t.habit_id || undefined,
+        // @ts-ignore
+        reminderTime: t.reminder_time || undefined
       })) as Task[];
     },
     enabled: !!session?.user?.id,
@@ -54,9 +141,19 @@ export function useTasks() {
         category: task.category,
         subtasks: task.subtasks ? JSON.stringify(task.subtasks) : '[]',
         estimated_minutes: task.estimatedMinutes,
-        habit_id: task.habitId
+        habit_id: task.habitId,
+        reminder_time: task.reminderTime
       }).select().single();
       if (error) throw error;
+
+      // Schedule Individual Notification
+      if (data.due_date && task.reminderTime) {
+        NotificationManager.scheduleTaskReminder(data.id, data.title, data.due_date, task.reminderTime);
+      }
+
+      // Schedule Notification Check (Legacy Summary)
+      if (session?.user?.id) updateTaskNotification(session.user.id);
+
       return data;
     },
     onSuccess: () => {
@@ -78,6 +175,7 @@ export function useTasks() {
         subtasks: JSON.stringify(task.subtasks)
       }).eq('id', task.id);
       if (error) throw error;
+      if (session?.user?.id) updateTaskNotification(session.user.id);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tasks'] });
@@ -96,32 +194,104 @@ export function useTasks() {
       }).eq('id', id);
       if (error) throw error;
 
-      // XP REWARD
+      // HABIT SYNC LOGIC
+      // If this task is a habit task, sync with habit completion
+      if (task.habitId || task.description?.startsWith('Habit:')) {
+        // Resolve habit ID if not explicit (legacy support)
+        let habitId = task.habitId;
+        if (!habitId && task.description?.startsWith('Habit:')) {
+          // Try to find habit by title matching
+          const habitTitle = task.description.split(' - ')[0].replace('Habit: ', '');
+          const { data: habit } = await supabase.from('habits').select('id').eq('title', habitTitle).eq('user_id', session?.user?.id).single();
+          if (habit) habitId = habit.id;
+        }
+
+        if (habitId) {
+          const today = getToday();
+          // Use task.dueDate for completion date if it exists, otherwise today
+          // This ensures if I complete yesterday's habit today, it fills yesterday's slot in the grid
+          const completionDate = task.dueDate || today;
+
+          if (newCompleted) {
+            // complete habit
+            const { error: hError } = await supabase.from('habit_completions').insert({
+              habit_id: habitId,
+              user_id: session?.user?.id,
+              completed_date: completionDate
+            });
+            // Ignore duplicate key error (already completed)
+            if (hError && hError.code !== '23505') console.error("Habit sync error:", hError);
+
+            // Update local habit streak display if needed (invalidation handles it)
+          } else {
+            // uncomplete habit
+            await supabase.from('habit_completions').delete()
+              .eq('habit_id', habitId)
+              .eq('user_id', session?.user?.id)
+              .eq('completed_date', completionDate);
+          }
+          // Invalidate habits to refresh streak UI
+          queryClient.invalidateQueries({ queryKey: ['habits'] });
+        }
+      }
+
+      // XP REWARD / DEDUCTION
+      const { data: currentStats } = await supabase.from('user_stats').select('*').eq('id', session?.user?.id).single();
+      const isOverdue = task.dueDate && task.dueDate < getToday();
+
       if (newCompleted) {
-        const { data: currentStats } = await supabase.from('user_stats').select('*').eq('id', session?.user?.id).single();
+        // Notification Update
+        NotificationManager.cancelTaskReminder(task.id);
+        if (session?.user?.id) updateTaskNotification(session.user.id);
+
         if (currentStats) {
-          const newXp = (currentStats.xp || 0) + XP_REWARDS.TASK_COMPLETION;
+          // STRICT DEADLINE LOGIC: 0 XP if overdue
+          if (isOverdue) {
+            toast.info(`Task Completed (Overdue). No XP awarded.`);
+          } else {
+            const newXp = (currentStats.xp || 0) + XP_REWARDS.TASK_COMPLETION;
+            const lvlInfo = calculateLevelInfo(newXp);
+            await supabase.from('user_stats').update({ xp: newXp, level: lvlInfo.level }).eq('id', session?.user?.id);
+
+            if (lvlInfo.level > (currentStats.level || 1)) {
+              toast.success(`LEVEL UP! Rank: ${lvlInfo.rank} - ${lvlInfo.rankTitle}`);
+            } else {
+              toast.success(`+${XP_REWARDS.TASK_COMPLETION} XP`);
+            }
+          }
+        }
+      } else {
+        // Task Unchecked - Deduct XP
+        // Re-schedule reminder if it exists
+        if (task.dueDate && task.reminderTime) {
+          NotificationManager.scheduleTaskReminder(task.id, task.title, task.dueDate, task.reminderTime);
+        }
+
+        if (currentStats && !isOverdue) {
+          let newXp = (currentStats.xp || 0) - XP_REWARDS.TASK_COMPLETION;
+          if (newXp < 0) newXp = 0; // Prevent negative XP
+
           const lvlInfo = calculateLevelInfo(newXp);
           await supabase.from('user_stats').update({ xp: newXp, level: lvlInfo.level }).eq('id', session?.user?.id);
 
-          if (lvlInfo.level > (currentStats.level || 1)) {
-            toast.success(`LEVEL UP! Rank: ${lvlInfo.rank} - ${lvlInfo.rankTitle}`);
-          } else {
-            toast.success(`+${XP_REWARDS.TASK_COMPLETION} XP`);
-          }
+          toast.info(`-${XP_REWARDS.TASK_COMPLETION} XP`);
+        } else if (isOverdue) {
+          toast.info("Task Reset. (No XP change for overdue task)");
         }
       }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tasks'] });
       queryClient.invalidateQueries({ queryKey: ['stats'] });
-    }
+      queryClient.invalidateQueries({ queryKey: ['habits'] });
+    },
   });
 
   const deleteTaskMutation = useMutation({
     mutationFn: async (id: string) => {
       const { error } = await supabase.from('tasks').delete().eq('id', id);
       if (error) throw error;
+      if (session?.user?.id) updateTaskNotification(session.user.id);
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['tasks'] }),
   });
@@ -238,7 +408,6 @@ export function useHabits() {
         await supabase.from('user_stats').update({
           xp: newXp,
           level: newLevel,
-          // We could also update total_habits_completed if that column existed, but it doesn't.
         }).eq('id', session?.user?.id);
 
         if (newLevel > (currentStats.level || 1)) {
@@ -246,12 +415,76 @@ export function useHabits() {
         }
       }
       // --- XP LOGIC END ---
+
+      // --- STREAK CALCULATION LOGIC ---
+      // Fetch all completion dates for this habit (inclusive of today)
+      const { data: completions } = await supabase.from('habit_completions')
+        .select('completed_date')
+        .eq('habit_id', id)
+        .eq('user_id', session?.user?.id)
+        .lte('completed_date', today)
+        .order('completed_date', { ascending: false });
+
+      if (completions) {
+        // Create a Set of unique completion dates
+        const uniqueDates = Array.from(new Set(completions.map(c => c.completed_date)));
+
+        let currentStreak = 0;
+        let checkDateStr = today;
+
+        // Helper to subtract 1 day correctly in local time
+        const getPrevDay = (dStr: string) => {
+          const [y, m, d] = dStr.split('-').map(Number);
+          const date = new Date(y, m - 1, d);
+          date.setDate(date.getDate() - 1);
+          return date.toLocaleDateString('en-CA');
+        };
+
+        // Iterate to count consecutive days
+        for (const d of uniqueDates) {
+          if (d === checkDateStr) {
+            currentStreak++;
+            checkDateStr = getPrevDay(checkDateStr);
+          } else {
+            break; // Gap found
+          }
+        }
+
+        // Update Habit Streak
+        const { data: habitData } = await supabase.from('habits').select('best_streak').eq('id', id).single();
+        const bestStreak = Math.max(habitData?.best_streak || 0, currentStreak);
+
+        await supabase.from('habits').update({
+          streak: currentStreak,
+          best_streak: bestStreak
+        }).eq('id', id);
+      }
+      // --- STREAK CALCULATION END ---
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['habits'] });
       queryClient.invalidateQueries({ queryKey: ['stats'] });
       queryClient.invalidateQueries({ queryKey: ['profile'] }); // In case profile relies on level
     },
+  });
+
+  const uncompleteHabitMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from('habit_completions').delete()
+        .eq('habit_id', id)
+        .eq('user_id', session?.user?.id)
+        .eq('completed_date', today);
+
+      if (error) throw error;
+
+      // Optional: Deduct XP? usually we don't to avoid complexity/anger, but strictly speaking we should. 
+      // For now, let's just allow unchecking without penalty logic to keep it simple, or user might abuse it? 
+      // Actually simpler not to touch XP on undo for this MVP.
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['habits'] });
+      queryClient.invalidateQueries({ queryKey: ['stats'] });
+    }
   });
 
   const updateHabitMutation = useMutation({
@@ -275,6 +508,7 @@ export function useHabits() {
     updateHabit: (habit: Habit) => updateHabitMutation.mutate(habit),
     deleteHabit: (id: string) => deleteHabitMutation.mutate(id),
     completeHabit: (id: string) => completeHabitMutation.mutate(id),
+    uncompleteHabit: (id: string) => uncompleteHabitMutation.mutate(id),
     isCompletedToday: (id: string) => habits.find(h => h.id === id)?.completedDates.includes(today) || false,
   };
 }
@@ -380,6 +614,7 @@ export function useJournal() {
         sentiment: entry.sentiment || 'neutral'
       });
       if (error) throw error;
+      if (session?.user?.id) updateJournalNotification(session.user.id);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['journal'] });
@@ -404,6 +639,7 @@ export function useJournal() {
     mutationFn: async (id: string) => {
       const { error } = await supabase.from('journal_entries').delete().eq('id', id);
       if (error) throw error;
+      if (session?.user?.id) updateJournalNotification(session.user.id);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['journal'] });

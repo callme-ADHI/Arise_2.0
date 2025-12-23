@@ -4,6 +4,7 @@ import { Home, BookOpen, CheckSquare, Target, Calendar, BarChart3, User, Sparkle
 import { cn } from "@/lib/utils";
 import { Button } from "./ui/button";
 import { useStats } from "@/lib/store";
+import FunLogo from "./FunLogo";
 
 const navigation = [
   { name: "Home", href: "/", icon: Home },
@@ -26,14 +27,14 @@ interface SidebarProps {
 const Sidebar = ({ isOpen, onClose, isExpanded, setIsExpanded }: SidebarProps) => {
   const stats = useStats();
   const [isHovering, setIsHovering] = useState(false);
-  
+
   const expanded = isExpanded || isHovering;
 
   return (
     <>
       {/* Mobile Overlay */}
       {isOpen && <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-40 md:hidden" onClick={onClose} />}
-      
+
       {/* Sidebar */}
       <aside
         onMouseEnter={() => setIsHovering(true)}
@@ -48,11 +49,12 @@ const Sidebar = ({ isOpen, onClose, isExpanded, setIsExpanded }: SidebarProps) =
         <div className="flex flex-col h-full">
           {/* Logo */}
           <div className={cn("flex items-center h-14 px-3 border-b border-border", expanded ? "justify-between" : "justify-center")}>
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg gradient-primary flex items-center justify-center shrink-0">
-                <Sparkles className="w-4 h-4 text-primary-foreground" />
-              </div>
-              {expanded && <span className="text-lg font-bold gradient-text whitespace-nowrap">ARISE</span>}
+            <div className={`flex items-center gap-2 ${expanded ? "w-full" : ""}`}>
+              {expanded ? (
+                <FunLogo showText={true} />
+              ) : (
+                <FunLogo showText={false} />
+              )}
             </div>
             {expanded && (
               <Button variant="ghost" size="icon" className="h-7 w-7 hidden md:flex" onClick={() => setIsExpanded(!isExpanded)}>

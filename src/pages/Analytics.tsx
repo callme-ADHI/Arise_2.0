@@ -23,9 +23,23 @@ const Analytics = () => {
   const getDaysArray = (count: number) => Array.from({ length: count }, (_, i) => {
     const d = new Date();
     d.setDate(d.getDate() - (count - 1 - i));
-    return d.toISOString().split('T')[0];
+    return d.toLocaleDateString('en-CA');
   });
 
+  const getCurrentWeek = () => {
+    const today = new Date();
+    const day = today.getDay(); // 0 (Sun) to 6 (Sat)
+    const sunday = new Date(today);
+    sunday.setDate(today.getDate() - day); // Go back to Sunday
+
+    return Array.from({ length: 7 }, (_, i) => {
+      const d = new Date(sunday);
+      d.setDate(sunday.getDate() + i);
+      return d.toLocaleDateString('en-CA');
+    });
+  };
+
+  const currentWeek = getCurrentWeek();
   const last7Days = getDaysArray(7);
   const last30Days = getDaysArray(30);
   const daysToUse = timeRange === 'week' ? last7Days : timeRange === 'month' ? last30Days : last30Days;
@@ -290,48 +304,68 @@ const Analytics = () => {
 
         <TabsContent value="habits" className="space-y-4 mt-4">
           <Card className="glass">
-            <CardHeader className="pb-2"><CardTitle className="text-base">Habit Completion Heatmap</CardTitle></CardHeader>
+            <CardHeader className="pb-2"><CardTitle className="text-base">Habit Completion Heatmap (This Week)</CardTitle></CardHeader>
             <CardContent>
               {habits.length === 0 ? (
                 <p className="text-center text-muted-foreground py-8">No habits tracked yet. Create habits to see analytics!</p>
               ) : (
                 <div className="overflow-x-auto">
-                  <table className="w-full">
+                  <table className="w-full border-collapse">
                     <thead>
                       <tr>
-                        <th className="text-left text-sm font-medium text-muted-foreground pb-2">Habit</th>
-                        {last7Days.map(date => (
+                        <th className="text-left text-sm font-medium text-muted-foreground pb-2 pl-2">Habit</th>
+                        {currentWeek.map(date => (
                           <th key={date} className="text-center text-xs font-medium text-muted-foreground pb-2 px-1">
                             {['S', 'M', 'T', 'W', 'T', 'F', 'S'][new Date(date).getDay()]}
                           </th>
                         ))}
-                        <th className="text-right text-sm font-medium text-muted-foreground pb-2">Rate</th>
+                        <th className="text-right text-sm font-medium text-muted-foreground pb-2 pr-2">Rate</th>
                       </tr>
                     </thead>
                     <tbody>
                       {habits.map((habit) => {
-                        const completed = last7Days.filter(d => habit.completedDates.includes(d)).length;
+                        const completed = currentWeek.filter(d => habit.completedDates.includes(d)).length;
                         const rate = Math.round((completed / 7) * 100);
                         return (
-                          <tr key={habit.id}>
-                            <td className="text-sm py-2 pr-4 max-w-[150px] truncate">{habit.title}</td>
-                            {last7Days.map(date => {
+                          <tr key={habit.id} className="border-b border-border/50 last:border-0 hover:bg-muted/30 transition-colors">
+                            <td className="text-sm py-3 pl-2 max-w-[150px] truncate font-medium">{habit.title}</td>
+                            {currentWeek.map(date => {
                               const isCompleted = habit.completedDates.includes(date);
-                              // Logic: 
-                              // - If completed: use category color (habit.color)
-                              // - If NOT completed: use Red (bg-red-500/20 or similar) to signify missed
-                              // Note: last7Days usually ends with today.
-                              const cellColor = isCompleted
-                                ? habit.color
-                                : "bg-red-500/20"; // Red for missed
+                              const dateObj = new Date(date);
+                              const today = new Date();
+                              today.setHours(0, 0, 0, 0);
+                              dateObj.setHours(0, 0, 0, 0);
+
+                              const isPastOrToday = dateObj <= today;
+
+                              // Logic:
+                              // - Completed: Green (bg-arise-success / emerald-500)
+                              // - Not Completed & (Past or Today): Red (Missed)
+                              // - Future: Default
+
+                              let colorClass = "bg-secondary/50"; // Default future/empty
+                              if (isCompleted) {
+                                colorClass = "bg-arise-success shadow-[0_0_10px_rgba(16,185,129,0.3)]";
+                              } else if (isPastOrToday) {
+                                colorClass = "bg-red-500/80"; // Explicit Red for missed
+                              }
 
                               return (
-                                <td key={date} className="p-1">
-                                  <div className={cn("w-6 h-6 rounded transition-all", cellColor)} />
+                                <td key={date} className="p-1 text-center">
+                                  <div
+                                    className={cn(
+                                      "w-8 h-8 mx-auto rounded-md transition-all duration-300 flex items-center justify-center",
+                                      colorClass,
+                                      isCompleted ? "scale-100" : "scale-90 opacity-90"
+                                    )}
+                                  >
+                                    {isCompleted && <CheckCircle2 className="w-4 h-4 text-black font-bold" />}
+                                    {!isCompleted && isPastOrToday && <span className="w-2 h-2 rounded-full bg-black/20" />}
+                                  </div>
                                 </td>
                               );
                             })}
-                            <td className={cn("text-right font-medium", rate >= 70 ? "text-arise-success" : rate >= 40 ? "text-arise-warning" : "text-destructive")}>{rate}%</td>
+                            <td className={cn("text-right font-bold pr-2", rate >= 70 ? "text-arise-success" : rate >= 40 ? "text-arise-warning" : "text-destructive")}>{rate}%</td>
                           </tr>
                         );
                       })}
@@ -343,16 +377,18 @@ const Analytics = () => {
           </Card>
 
           <div className="grid md:grid-cols-3 gap-4">
-            {habits.slice(0, 3).map((habit) => (
-              <Card key={habit.id} className="glass">
-                <CardContent className="pt-4">
-                  <div className={cn("w-10 h-10 rounded-full flex items-center justify-center mb-2", habit.color)}>
-                    <Flame className="w-5 h-5 text-primary-foreground" />
+            {habits.map((habit) => (
+              <Card key={habit.id} className="glass hover:border-primary/50 transition-colors">
+                <CardContent className="pt-4 flex items-center gap-4">
+                  <div className={cn("w-12 h-12 rounded-full flex items-center justify-center shadow-lg", habit.color)}>
+                    <Flame className="w-6 h-6 text-white" />
                   </div>
-                  <p className="font-medium">{habit.title}</p>
-                  <div className="flex items-center gap-4 mt-2 text-sm">
-                    <span className="text-arise-energy font-bold">{habit.streak} streak</span>
-                    <span className="text-muted-foreground">Best: {habit.bestStreak}</span>
+                  <div>
+                    <p className="font-bold text-lg">{habit.title}</p>
+                    <div className="flex items-center gap-3 text-sm mt-1">
+                      <span className="text-arise-energy font-semibold flex items-center"><Zap className="w-3 h-3 mr-1" />{habit.streak} streak</span>
+                      <span className="text-muted-foreground text-xs">Best: {habit.bestStreak}</span>
+                    </div>
                   </div>
                 </CardContent>
               </Card>

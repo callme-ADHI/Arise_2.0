@@ -18,7 +18,7 @@ import { Task } from "@/lib/types";
 import { motion, AnimatePresence, useScroll, useTransform } from "framer-motion";
 
 // Helper functions (moved outside component)
-const todayStr = new Date().toISOString().split('T')[0];
+const todayStr = new Date().toLocaleDateString('en-CA');
 const isHabit = (t: Task) => t.description?.startsWith('Habit:');
 const canComplete = (t: Task) => !isHabit(t) || t.dueDate === todayStr || t.completed;
 const canDelete = (t: Task) => !isHabit(t);
@@ -58,7 +58,7 @@ const TaskCard = forwardRef<HTMLDivElement, TaskCardProps>(
             disabled={locked}
             className={cn(
               "w-6 h-6 rounded-md border flex items-center justify-center transition-all duration-300",
-              task.completed ? "bg-amber-500 border-amber-500 text-black shadow-[0_0_10px_rgba(245,158,11,0.5)]" :
+              task.completed ? "bg-emerald-500 border-emerald-500 text-black shadow-[0_0_10px_rgba(16,185,129,0.5)]" :
                 locked ? "border-zinc-800 bg-zinc-900/50 cursor-not-allowed opacity-50" :
                   "border-zinc-700 group-hover:border-amber-500/50 text-transparent hover:text-amber-500/50"
             )}
@@ -112,7 +112,7 @@ const Tasks = () => {
   // Form State
   const [newTask, setNewTask] = useState({
     title: "", description: "", priority: "medium" as const, category: "Work",
-    dueDate: new Date().toISOString().split('T')[0], estimatedMinutes: 30
+    dueDate: new Date().toLocaleDateString('en-CA'), estimatedMinutes: 30, reminderTime: "18:00"
   });
 
   // Parallax Hooks
@@ -161,20 +161,20 @@ const Tasks = () => {
       <div className="relative z-10 p-8 max-w-[1600px] mx-auto min-h-screen flex flex-col">
 
         {/* Header Section */}
-        <div className="flex flex-col md:flex-row justify-between items-end mb-8 border-b border-white/5 pb-4 bg-[#09090b]/80 backdrop-blur-xl sticky top-0 z-50 pt-4 -mx-8 px-8 gap-4">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-8 border-b border-white/5 pb-4 bg-[#09090b]/80 backdrop-blur-xl sticky top-0 z-50 pt-4 -mx-8 px-8 gap-4">
           <div>
             <h1 className="text-4xl font-extralight tracking-tight text-white mb-1"><span className="font-bold text-amber-500">Mission</span> Control</h1>
             <p className="text-zinc-500 text-xs tracking-widest uppercase">Tactical Operations Center // EST. 2024</p>
           </div>
 
-          <div className="flex items-center gap-4 w-full md:w-auto overflow-x-auto pb-2 md:pb-0 scrollbar-hide">
-            <div className="bg-zinc-900/80 border border-white/5 p-1 rounded-lg flex">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 w-full md:w-auto">
+            <div className="bg-zinc-900/80 border border-white/5 p-1 rounded-lg flex overflow-x-auto max-w-full scrollbar-hide">
               {['today', 'all', 'categories', 'habits', 'done'].map(tab => (
                 <button
                   key={tab}
                   onClick={() => setView(tab as any)}
                   className={cn(
-                    "capitalize text-xs px-3 py-1.5 rounded-md transition-all font-medium",
+                    "capitalize text-xs px-3 py-1.5 rounded-md transition-all font-medium whitespace-nowrap",
                     view === tab ? "bg-zinc-800 text-white shadow-sm" : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50"
                   )}
                 >
@@ -183,11 +183,11 @@ const Tasks = () => {
               ))}
             </div>
 
-            <div className="flex gap-2">
-              <Button variant="outline" onClick={() => setIsManagingCategories(true)} className="bg-zinc-900/50 border-white/10 hover:border-amber-500/50 hover:bg-zinc-900 text-zinc-400 hover:text-amber-500 transition-all text-xs">
-                <Tag className="w-3 h-3 mr-2" /> Manage Sectors
+            <div className="flex gap-2 w-full sm:w-auto">
+              <Button variant="outline" onClick={() => setIsManagingCategories(true)} className="flex-1 sm:flex-none bg-zinc-900/50 border-white/10 hover:border-amber-500/50 hover:bg-zinc-900 text-zinc-400 hover:text-amber-500 transition-all text-xs">
+                <Tag className="w-3 h-3 mr-2" /> Sectors
               </Button>
-              <Button onClick={() => setIsAdding(true)} className="bg-amber-600 hover:bg-amber-500 text-white shadow-[0_0_20px_rgba(245,158,11,0.2)] text-xs font-bold uppercase tracking-wide">
+              <Button onClick={() => setIsAdding(true)} className="flex-1 sm:flex-none bg-amber-600 hover:bg-amber-500 text-white shadow-[0_0_20px_rgba(245,158,11,0.2)] text-xs font-bold uppercase tracking-wide">
                 <Plus className="w-3 h-3 mr-2" /> New Mission
               </Button>
             </div>
@@ -326,7 +326,7 @@ const Tasks = () => {
 
         {/* Task Editor */}
         <Dialog open={isAdding || !!editingTask} onOpenChange={(o) => { if (!o) { setIsAdding(false); setEditingTask(null); } }}>
-          <DialogContent className="bg-zinc-950 border-zinc-800 text-white sm:max-w-[500px] shadow-2xl">
+          <DialogContent className="bg-zinc-950 border-zinc-800 text-white sm:max-w-[500px] max-h-[85vh] overflow-y-auto shadow-2xl">
             <DialogHeader><DialogTitle className="text-xl font-light text-amber-500">{isAdding ? "Initialize Mission" : "Modify Mission"}</DialogTitle></DialogHeader>
             <div className="space-y-4 pt-4">
               <Input className="bg-zinc-900 border-zinc-800 h-11" placeholder="Mission Title" value={isAdding ? newTask.title : editingTask?.title} onChange={e => isAdding ? setNewTask({ ...newTask, title: e.target.value }) : setEditingTask({ ...editingTask!, title: e.target.value })} autoFocus />
@@ -335,7 +335,10 @@ const Tasks = () => {
                 <Select value={isAdding ? newTask.priority : editingTask?.priority} onValueChange={v => isAdding ? setNewTask({ ...newTask, priority: v as any }) : setEditingTask({ ...editingTask!, priority: v as any })}><SelectTrigger className="bg-zinc-900 border-zinc-800 h-10"><SelectValue /></SelectTrigger><SelectContent className="bg-zinc-900 border-zinc-800 text-white"><SelectItem value="high">High Priority</SelectItem><SelectItem value="medium">Medium Priority</SelectItem><SelectItem value="low">Low Priority</SelectItem></SelectContent></Select>
                 <Select value={isAdding ? newTask.category : editingTask?.category} onValueChange={v => isAdding ? setNewTask({ ...newTask, category: v }) : setEditingTask({ ...editingTask!, category: v })}><SelectTrigger className="bg-zinc-900 border-zinc-800 h-10"><SelectValue placeholder="Sector" /></SelectTrigger><SelectContent className="bg-zinc-900 border-zinc-800 text-white">{categories.map(c => <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>)}</SelectContent></Select>
               </div>
-              <Input type="date" className="bg-zinc-900 border-zinc-800 h-10" value={isAdding ? newTask.dueDate : editingTask?.dueDate} onChange={e => isAdding ? setNewTask({ ...newTask, dueDate: e.target.value }) : setEditingTask({ ...editingTask!, dueDate: e.target.value })} />
+              <div className="grid grid-cols-2 gap-4">
+                <Input type="date" className="bg-zinc-900 border-zinc-800 h-10" value={isAdding ? newTask.dueDate : editingTask?.dueDate} onChange={e => isAdding ? setNewTask({ ...newTask, dueDate: e.target.value }) : setEditingTask({ ...editingTask!, dueDate: e.target.value })} />
+                <Input type="time" className="bg-zinc-900 border-zinc-800 h-10" value={isAdding ? newTask.reminderTime : editingTask?.reminderTime || "18:00"} onChange={e => isAdding ? setNewTask({ ...newTask, reminderTime: e.target.value }) : setEditingTask({ ...editingTask!, reminderTime: e.target.value })} />
+              </div>
               <Button onClick={isAdding ? handleAddTask : handleUpdateTask} className="w-full bg-amber-600 hover:bg-amber-500 text-white h-11 text-base font-medium">{isAdding ? "Initialize" : "Update"}</Button>
             </div>
           </DialogContent>

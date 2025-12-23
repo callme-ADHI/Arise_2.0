@@ -11,6 +11,7 @@ export interface Task {
   completedAt?: string;
   estimatedMinutes?: number;
   habitId?: string;
+  reminderTime?: string;
 }
 
 export interface Subtask {

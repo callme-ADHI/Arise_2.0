@@ -1,73 +1,90 @@
-# Welcome to your Lovable project
+# Arise 2.0
 
-## Project info
+![Arise Banner](public/icon.png)
 
-**URL**: https://lovable.dev/projects/a00792a8-a92a-4263-82c0-c31279a13cc8
+**Arise** is a comprehensive, gamified productivity suite designed to help you master your habits, track your tasks, and optimize your mental state. Built with modern web technologies and wrapped for cross-platform performance, Arise combines task management, habit tracking, journaling, and focus tools into a single, beautiful interface.
 
-## How can I edit this code?
+## 🚀 Features
 
-There are several ways of editing your application.
+### ✅ Advanced Task Management
+-   **Smart Organization**: Group tasks by categories, set priorities, and manage deadlines.
+-   **Subtasks**: Break down complex goals into manageable steps.
+-   **Custom Notifications**: Set specific reminder times for important missions.
 
-**Use Lovable**
+### 🔥 Habit Tracking with Streaks
+-   **Streak Protection**: Robust streak calculation logic ensuring your hard work is accurately recorded.
+-   **Visual Heatmaps**: Track your consistency over time with intuitive visual cues.
+-   **Level Up**: Earn XP for completing habits and unlock new levels in your personal productivity journey.
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/a00792a8-a92a-4263-82c0-c31279a13cc8) and start prompting.
+### 🧠 Mood & Analytics
+-   **Mood Tracking**: Log your daily mood and energy levels with context (factors/notes).
+-   **Insightful Graphs**: Visualize mood trends and correlate them with your productivity.
+-   **Detailed Stats**: View completion rates, focus time distribution, and more.
 
-Changes made via Lovable will be committed automatically to this repo.
+### 🧘 Focus Mode
+-   **Pomodoro Timer**: Built-in timer with customizable modes (Focus, Short Break, Long Break).
+-   **Ambient Sounds**: Enhance your concentration with integrated background noise options.
 
-**Use your preferred IDE**
+### 📔 Reflection Journal
+-   **Daily Entries**: Capture your thoughts and reflections.
+-   **Markdown Support**: Write beautifully formatted entries.
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+## 🛠️ Tech Stack
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+*   **Frontend**: Rept, TypeScript, Vite
+*   **UI Framework**: Tailwind CSS, shadcn/ui
+*   **State Management**: React Query, Zustand (or Context)
+*   **Backend**: Supabase (PostgreSQL, Auth)
+*   **Desktop**: Electron (Linux, Windows)
+*   **Mobile**: Capacitor (Android)
 
-Follow these steps:
+## 📦 Installation & Setup
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+### Prerequisites
+*   Node.js (v18+)
+*   npm or yarn
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
+### Development
+```bash
+# Clone the repository
+git clone https://github.com/callme-ADHI/Arise_2.0.git
 
-# Step 3: Install the necessary dependencies.
-npm i
+# Navigate to directory
+cd Arise_2.0
 
-# Step 4: Start the development server with auto-reloading and an instant preview.
+# Install dependencies
+npm install
+
+# Start development server
 npm run dev
 ```
 
-**Edit a file directly in GitHub**
+### Build for Desktop (Electron)
+```bash
+# Build for Linux
+npm run electron:build
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+# Build for Windows (requires Wine on Linux or Windows OS)
+npm run electron:build -- --win
+```
 
-**Use GitHub Codespaces**
+### Build for Mobile (Android)
+```bash
+# Sync Capacitor config
+npx cap sync
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+# Open Android Studio to build/run
+npx cap open android
+```
 
-## What technologies are used for this project?
+## 🔐 Configuration
 
-This project is built with:
+Create a `.env` file in the root directory with your Supabase credentials:
+```env
+VITE_SUPABASE_URL=your_supabase_url
+VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
+```
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+## 📄 License
 
-## How can I deploy this project?
-
-Simply open [Lovable](https://lovable.dev/projects/a00792a8-a92a-4263-82c0-c31279a13cc8) and click on Share -> Publish.
-
-## Can I connect a custom domain to my Lovable project?
-
-Yes, you can!
-
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+All rights reserved.

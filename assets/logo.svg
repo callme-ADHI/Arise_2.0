@@ -1,0 +1,39 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background: Dark Zinc/Black Theme -->
+  <rect width="1024" height="1024" rx="200" fill="#09090b"/>
+  
+  <!-- Subtle Gradient Background Glow -->
+  <defs>
+    <radialGradient id="glow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(512 512) rotate(90) scale(512)">
+      <stop stop-color="#f59e0b" stop-opacity="0.2"/>
+      <stop offset="0.5" stop-color="#a855f7" stop-opacity="0.1"/>
+      <stop offset="1" stop-color="#06b6d4" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="1024" height="1024" fill="url(#glow)"/>
+
+  <!-- Logo Group Scaled and Centered -->
+  <g transform="translate(192, 192) scale(26.66)">
+    <!-- The 'A' Shape -->
+             <!-- 
+           Original was 24x24.
+           Scale calculation:
+           Target size approx 640x640 within 1024x1024.
+           640 / 24 = ~26.66
+        -->
+    <path
+        d="M12 2L3 19H21L12 2Z"
+        fill="#18181b" 
+        stroke="#22d3ee"
+        stroke-width="1.5"
+        stroke-linejoin="round"
+    />
+    <path
+        d="M12 2L12 16M7 14L17 14"
+        stroke="#a855f7"
+        stroke-width="1.5"
+        stroke-linecap="round"
+    />
+    <circle cx="12" cy="8" r="1.5" fill="#fbbf24" />
+  </g>
+</svg>

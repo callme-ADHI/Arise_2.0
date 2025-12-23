@@ -43,7 +43,7 @@ interface HabitQuestions {
 }
 
 const Habits = () => {
-  const { habits, addHabit, completeHabit, isCompletedToday, deleteHabit } = useHabits();
+  const { habits, addHabit, completeHabit, uncompleteHabit, isCompletedToday, deleteHabit } = useHabits();
   const { categories, addCategory, deleteCategory } = useCategories();
   const { addTask } = useTasks();
   const { addEvent } = useCalendar();
@@ -196,39 +196,43 @@ const Habits = () => {
     const selectedActionsList = aiAnalysis.actions.filter(a => selectedActions.includes(a.number));
     const today = new Date();
 
-    const daysPerAction = Math.floor(aiAnalysis.duration_days / selectedActionsList.length);
-
     selectedActionsList.forEach((action, index) => {
+      // FIX: DUPLICATION & PRE-GENERATION
+      // User reported tasks duplicating twice.
+      // Cause 1: We were generating 60 days of tasks here.
+      // Cause 2: We weren't passing 'habitId', so refreshHabitTasks didn't know these tasks belonged to the habit, and created duplicates.
+
+      // NEW LOGIC: Only create TODAY's task here. Future tasks are handled by refreshHabitTasks daily.
+      const daysPerAction = Math.floor(aiAnalysis.duration_days / selectedActionsList.length);
       const startDay = index * daysPerAction;
       const endDay = (index + 1) * daysPerAction;
 
-      for (let day = startDay; day < endDay && day < aiAnalysis.duration_days; day++) {
-        const taskDate = new Date(today);
-        taskDate.setDate(taskDate.getDate() + day);
-        const dateStr = taskDate.toISOString().split('T')[0];
+      // Only check if today (day 0) falls within this action's phase
+      // Since we just started, today is day 0. So we only trigger for the FIRST action (index 0).
+      if (index === 0) {
+        const dateStr = new Date().toLocaleDateString('en-CA'); // Use local time!
 
         addTask({
           title: action.task,
           description: `Habit: ${newHabitTitle} - ${aiAnalysis.cue}`,
           completed: false,
-          priority: day < 7 ? 'high' : 'medium',
+          priority: 'high',
           dueDate: dateStr,
           category: categoryName,
           subtasks: [],
-          estimatedMinutes: action.estimatedMinutes
+          estimatedMinutes: action.estimatedMinutes,
+          habitId: newHabit.id // <--- CRITICAL FIX: Pass habitId
         });
 
-        if (day < 7 || day % 7 === 0) {
-          addEvent({
-            title: action.task,
-            type: 'habit',
-            date: dateStr,
-            time: questions.preferredTime === 'morning' ? '07:00' :
-              questions.preferredTime === 'afternoon' ? '13:00' : '19:00',
-            duration: `${action.estimatedMinutes}m`,
-            color: 'bg-arise-success'
-          });
-        }
+        addEvent({
+          title: action.task,
+          type: 'habit',
+          date: dateStr,
+          time: questions.preferredTime === 'morning' ? '07:00' :
+            questions.preferredTime === 'afternoon' ? '13:00' : '19:00',
+          duration: `${action.estimatedMinutes}m`,
+          color: 'bg-arise-success'
+        });
       }
     });
 
@@ -270,7 +274,7 @@ const Habits = () => {
     const last30Days = Array.from({ length: 30 }, (_, i) => {
       const d = new Date();
       d.setDate(d.getDate() - i);
-      return d.toISOString().split('T')[0];
+      return d.toLocaleDateString('en-CA');
     });
     const completedCount = h.completedDates.filter(d => last30Days.includes(d)).length;
     return { ...h, completionRate: Math.round((completedCount / 30) * 100) };
@@ -286,7 +290,7 @@ const Habits = () => {
       </div>
 
       {/* Header */}
-      <header className="relative z-10 flex items-center justify-between mb-8 pb-4 border-b border-white/5">
+      <header className="relative z-10 flex flex-col md:flex-row items-start md:items-center justify-between mb-8 pb-4 border-b border-white/5 gap-4">
         <div>
           <h1 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-indigo-400 to-purple-400 flex items-center gap-3">
             <Brain className="w-8 h-8 text-indigo-400" />
@@ -294,19 +298,19 @@ const Habits = () => {
           </h1>
           <p className="text-zinc-500 text-sm mt-1 font-mono tracking-wide">BEHAVIORAL ENGINEERING // ACTIVE PROTOCOLS: {habits.length}</p>
         </div>
-        <div className="flex gap-3">
+        <div className="flex gap-3 w-full md:w-auto">
           <Button
             variant="outline"
-            className="border-white/10 bg-white/5 hover:bg-white/10 text-zinc-300 hover:text-white transition-all backdrop-blur-md"
+            className="flex-1 md:flex-none border-white/10 bg-white/5 hover:bg-white/10 text-zinc-300 hover:text-white transition-all backdrop-blur-md"
             onClick={() => setIsManagingCategories(true)}
           >
-            <Tag className="w-4 h-4 mr-2" />Manage Sectors
+            <Tag className="w-4 h-4 mr-2" />Sectors
           </Button>
           <Button
-            className="bg-indigo-600 hover:bg-indigo-500 text-white shadow-[0_0_15px_rgba(99,102,241,0.5)] border-none transition-all hover:scale-105"
+            className="flex-1 md:flex-none bg-indigo-600 hover:bg-indigo-500 text-white shadow-[0_0_15px_rgba(99,102,241,0.5)] border-none transition-all hover:scale-105"
             onClick={() => setIsAdding(true)}
           >
-            <Plus className="w-4 h-4 mr-2" />Initialize Habit
+            <Plus className="w-4 h-4 mr-2" />Initialize
           </Button>
         </div>
       </header>
@@ -437,7 +441,10 @@ const Habits = () => {
                     {/* Completion Trigger */}
                     <button
                       onClick={() => {
-                        if (!done) {
+                        if (done) {
+                          uncompleteHabit(habit.id);
+                          toast({ title: "Protocol Reset", description: "Completion undone." });
+                        } else {
                           completeHabit(habit.id);
                           toast({ title: "Protocol Complete", description: "System verified. Streak incremented." });
                         }
@@ -464,7 +471,7 @@ const Habits = () => {
 
       {/* Questions Dialog (Re-styled) */}
       <Dialog open={showQuestionsDialog} onOpenChange={setShowQuestionsDialog}>
-        <DialogContent className="max-w-lg bg-zinc-950 border-zinc-800 text-white">
+        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto bg-zinc-950 border-zinc-800 text-white">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-indigo-400">
               <HelpCircle className="w-5 h-5" />
@@ -530,7 +537,7 @@ const Habits = () => {
 
       {/* AI Dialog (Local Brain Result) */}
       <Dialog open={showAIDialog} onOpenChange={setShowAIDialog}>
-        <DialogContent className="max-w-lg bg-zinc-950 border-zinc-800 text-white">
+        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto bg-zinc-950 border-zinc-800 text-white">
           <DialogHeader>
             <DialogTitle className="text-indigo-400 flex items-center gap-2"><Brain className="w-5 h-5" /> Protocol Generated</DialogTitle>
             <DialogDescription className="text-zinc-500">Local Intelligence has optimized a 60-day plan.</DialogDescription>

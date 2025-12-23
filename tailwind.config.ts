@@ -57,6 +57,9 @@ export default {
           border: "hsl(var(--sidebar-border))",
           ring: "hsl(var(--sidebar-ring))",
         },
+        "arise-success": "#10b981", // emerald-500
+        "arise-warning": "#f59e0b", // amber-500
+        "arise-energy": "#f97316", // orange-500
       },
       borderRadius: {
         lg: "var(--radius)",

@@ -63,7 +63,7 @@ const CategoryManagerDialog = ({ isOpen, onClose }: CategoryManagerDialogProps) 
             onClose(val);
             if (!val) cancelEdit();
         }}>
-            <DialogContent className="sm:max-w-[400px] bg-zinc-950 border-zinc-800 text-white">
+            <DialogContent className="sm:max-w-[400px] max-h-[85vh] overflow-y-auto bg-zinc-950 border-zinc-800 text-white">
                 <DialogHeader>
                     <DialogTitle>Sector Management</DialogTitle>
                     <DialogDescription className="text-zinc-500">

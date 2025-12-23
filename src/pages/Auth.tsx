@@ -212,6 +212,7 @@ const Auth = () => {
         }}
         onMouseEnter={handleContainerEnter}
         onMouseLeave={handleContainerLeave}
+        onClick={handleContainerEnter}
       >
         {/* Collapsed State */}
         <div className={cn(
