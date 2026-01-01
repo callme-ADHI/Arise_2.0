@@ -5,10 +5,13 @@ import path from "path";
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => ({
-  base: './',
+  base: mode === 'development' ? '/' : './',
   server: {
     host: "::",
     port: 8080,
+    watch: {
+      ignored: ['**/node_modules/**', '**/.git/**', '**/.gemini/**', '**/.win32/**', '**/dist/**']
+    }
   },
   plugins: [react()].filter(Boolean),
   resolve: {

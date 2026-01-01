@@ -35,17 +35,23 @@ import { NotificationManager } from './lib/notifications'; // Added Notification
 const App = () => {
   const [isLoading, setIsLoading] = useState(true);
 
-  // Init Notifications
+  // Init Notifications and App
   useEffect(() => {
     const initApp = async () => {
-      await NotificationManager.init();
-      await NotificationManager.scheduleDailyTaskSummary();
-      await NotificationManager.scheduleDailyJournalSummary();
-
-      // Keep splash screen logic
-      setTimeout(() => setIsLoading(false), 2500);
+      // Non-blocking init
+      try {
+        await NotificationManager.init();
+        await NotificationManager.scheduleDailyTaskSummary();
+        await NotificationManager.scheduleDailyJournalSummary();
+      } catch (e) {
+        console.error("Initialization error:", e);
+      }
     };
     initApp();
+
+    // Splash screen timer - Guaranteed to run
+    const timer = setTimeout(() => setIsLoading(false), 2500);
+    return () => clearTimeout(timer);
   }, []);
 
   return (

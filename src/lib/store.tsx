@@ -106,6 +106,7 @@ export function useTasks() {
       const { data, error } = await supabase
         .from('tasks')
         .select('*')
+        .eq('user_id', session.user.id)
         .order('due_date', { ascending: true });
 
       if (error) throw error;
@@ -298,10 +299,10 @@ export function useTasks() {
 
   return {
     tasks,
-    addTask: (task: Omit<Task, 'id' | 'createdAt'>) => addTaskMutation.mutate(task),
-    updateTask: (task: Task) => updateTaskMutation.mutate(task),
-    deleteTask: (id: string) => deleteTaskMutation.mutate(id),
-    toggleTask: (id: string) => toggleTaskMutation.mutate(id),
+    addTask: (task: Omit<Task, 'id' | 'createdAt'>) => addTaskMutation.mutateAsync(task),
+    updateTask: (task: Task) => updateTaskMutation.mutateAsync(task),
+    deleteTask: (id: string) => deleteTaskMutation.mutateAsync(id),
+    toggleTask: (id: string) => toggleTaskMutation.mutateAsync(id),
     todayTasks: tasks.filter(t => t.dueDate === getToday()),
     pendingTasks: tasks.filter(t => !t.completed),
     completedTasks: tasks.filter(t => t.completed),

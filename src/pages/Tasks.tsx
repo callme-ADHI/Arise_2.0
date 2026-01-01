@@ -18,9 +18,9 @@ import { Task } from "@/lib/types";
 import { motion, AnimatePresence, useScroll, useTransform } from "framer-motion";
 
 // Helper functions (moved outside component)
-const todayStr = new Date().toLocaleDateString('en-CA');
+const getTodayStr = () => new Date().toLocaleDateString('en-CA');
 const isHabit = (t: Task) => t.description?.startsWith('Habit:');
-const canComplete = (t: Task) => !isHabit(t) || t.dueDate === todayStr || t.completed;
+const canComplete = (t: Task) => !isHabit(t) || t.dueDate === getTodayStr() || t.completed;
 const canDelete = (t: Task) => !isHabit(t);
 
 // --- Premium Components with ForwardRef ---
@@ -71,7 +71,7 @@ const TaskCard = forwardRef<HTMLDivElement, TaskCardProps>(
               {task.title}
             </h3>
             <div className="flex flex-wrap items-center gap-2 text-xs text-zinc-500 mt-1">
-              {task.dueDate && <span className={cn("flex items-center gap-1", task.dueDate === todayStr && "text-amber-500 font-medium")}><Calendar className="w-3 h-3" /> {new Date(task.dueDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span>}
+              {task.dueDate && <span className={cn("flex items-center gap-1", task.dueDate === getTodayStr() && "text-amber-500 font-medium")}><Calendar className="w-3 h-3" /> {new Date(task.dueDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span>}
               {task.priority === 'high' && !task.completed && <span className="text-amber-500 flex items-center gap-1">★ High Priority</span>}
               {isHabit(task) && <span className="text-blue-400 flex items-center gap-1">↻ Habit</span>}
             </div>
@@ -130,6 +130,12 @@ const Tasks = () => {
   }, [categories]);
 
   // Logic Handlers
+  useEffect(() => {
+    if (isAdding) {
+      setNewTask(prev => ({ ...prev, dueDate: getTodayStr() }));
+    }
+  }, [isAdding]);
+
   const handlePromote = (task: Task) => { updateTask({ ...task, priority: 'high' }); toast({ title: "Promoted to In Focus", className: "bg-amber-900/50 border-amber-500/20 text-amber-200" }); };
   const handleComplete = (task: Task) => {
     if (!canComplete(task)) { toast({ title: "Habit Locked", description: "You can only complete habits on their scheduled day.", variant: "destructive" }); return; }
@@ -137,14 +143,26 @@ const Tasks = () => {
     if (!task.completed) toast({ title: "Mission Accomplished", className: "bg-emerald-900/50 border-emerald-500/20 text-emerald-200" });
   };
 
-  const handleAddTask = () => {
+  // Debug Logging
+  useEffect(() => {
+    console.log("Current Date:", getTodayStr());
+    console.log("Tasks Loaded:", tasks.length);
+    console.log("Pending Tasks for Today or Earlier:", tasks.filter(t => !t.completed && t.dueDate <= getTodayStr()).length);
+  }, [tasks]);
+
+  const handleAddTask = async () => {
     if (!newTask.title.trim()) { toast({ title: "Title required", variant: "destructive" }); return; }
-    addTask({ ...newTask, completed: false, subtasks: [] });
-    setIsAdding(false);
-    setNewTask({ ...newTask, title: "", description: "" });
-    toast({ title: "Task Created" });
+    try {
+      await addTask({ ...newTask, completed: false, subtasks: [] });
+      setIsAdding(false);
+      setNewTask({ ...newTask, title: "", description: "", dueDate: getTodayStr() }); // Reset to fresh date
+      toast({ title: "Task Created" });
+    } catch (error: any) {
+      console.error("Task creation failed:", error);
+      toast({ title: "Failed to create task", description: error.message || "Unknown error", variant: "destructive" });
+    }
   };
-  const handleUpdateTask = () => { if (editingTask) { updateTask(editingTask); setEditingTask(null); toast({ title: "Task Updated" }); } };
+  const handleUpdateTask = async () => { if (editingTask) { try { await updateTask(editingTask); setEditingTask(null); toast({ title: "Task Updated" }); } catch (error: any) { toast({ title: "Update failed", description: error.message, variant: "destructive" }); } } };
 
   const handleCreateCategory = () => {
     if (!newCatName.trim()) return;
@@ -288,14 +306,14 @@ const Tasks = () => {
             <div className="max-w-4xl mx-auto space-y-4">
               <AnimatePresence mode='popLayout'>
                 {tasks.filter(t => {
-                  if (view === 'today') return !t.completed && t.dueDate === todayStr;
+                  if (view === 'today') return !t.completed && t.dueDate === getTodayStr();
                   if (view === 'all') return !t.completed;
                   if (view === 'habits') return isHabit(t) && !t.completed;
                   if (view === 'done') return t.completed;
                   return true;
                 }).length > 0 ? (
-                  tasks.filter(t => { /* filter logic duplicate for render */
-                    if (view === 'today') return !t.completed && t.dueDate === todayStr;
+                  tasks.filter(t => {
+                    if (view === 'today') return !t.completed && t.dueDate === getTodayStr();
                     if (view === 'all') return !t.completed;
                     if (view === 'habits') return isHabit(t) && !t.completed;
                     if (view === 'done') return t.completed;
