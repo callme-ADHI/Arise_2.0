@@ -7,6 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "build:dev": "vite build --mode development",
+    "clean": "rm -rf dist dist_electron node_modules",
     "lint": "eslint .",
     "preview": "vite preview",
     "electron:dev": "concurrently \"npm run dev\" \"wait-on http://localhost:5173 && electron .\"",
@@ -111,15 +112,15 @@
       "target": [
         "AppImage"
       ],
-      "icon": "assets/logo.png",
+      "icon": "assets/icon.svg",
       "category": "Utility"
     },
     "win": {
       "target": [
-        "nsis",
         "portable"
       ],
-      "icon": "assets/logo.png"
+      "icon": "assets/icon.svg",
+      "artifactName": "${productName}.${ext}"
     }
   }
 }

@@ -1,0 +1,9 @@
+version: 1.0.7
+files:
+  - url: Arise-1.0.7.AppImage
+    sha512: nA7K6eI3k8bym80S9KOPjIZswuAuXvLlvVVyWYW/t9LOuH3y15L3byErkHc6TosEpred6EpMDFhLkp81subQGw==
+    size: 136558137
+    blockMapSize: 144973
+path: Arise-1.0.7.AppImage
+sha512: nA7K6eI3k8bym80S9KOPjIZswuAuXvLlvVVyWYW/t9LOuH3y15L3byErkHc6TosEpred6EpMDFhLkp81subQGw==
+releaseDate: '2026-01-02T06:38:50.261Z'

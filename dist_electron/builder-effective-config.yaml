@@ -1,0 +1,21 @@
+directories:
+  output: dist_electron
+  buildResources: build
+appId: com.arise.app
+productName: Arise
+files:
+  - filter:
+      - dist/**/*
+      - electron/**/*
+      - assets/**/*
+linux:
+  target:
+    - AppImage
+  icon: assets/icon.svg
+  category: Utility
+win:
+  target:
+    - portable
+  icon: assets/icon.svg
+  artifactName: ${productName}.${ext}
+electronVersion: 39.2.7

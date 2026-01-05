@@ -10,7 +10,7 @@ function createWindow() {
             nodeIntegration: true,
             contextIsolation: false // For simple apps, or strictly configured
         },
-        icon: path.join(__dirname, '../assets/logo.png') // We'll need to make sure this exists or use the generated ones
+        icon: path.join(__dirname, '../assets/icon.svg') // We'll need to make sure this exists or use the generated ones
     });
 
     // Hide the menu bar for a cleaner "App" feel
